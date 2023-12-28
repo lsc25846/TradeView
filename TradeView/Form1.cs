@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Drawing;
+using System.Net;
 using System.Text.Json;
 using System.Windows.Forms;
 
@@ -9,6 +10,7 @@ namespace TradeView
     {
         private SocketDataClient dataClient;
         private StockQuote[] latestStockQuotes = null;
+        private Logger logger;
         public Form1()
         {
             InitializeComponents();
@@ -21,9 +23,11 @@ namespace TradeView
             {
                 dgvStockQuotes.Rows.Add(stockName, null, null, null);
             }
+            //初始化紀錄log路徑
+            logger = new Logger("logfile.txt");
 
             // 初始化数据客户端并订阅事件
-            dataClient = new SocketDataClient();
+            dataClient = new SocketDataClient(logger);
             dataClient.DataReceived += DataClient_NewDataReceived;
             // 初始化 Timer
             refreshTimer = new System.Windows.Forms.Timer();
@@ -120,12 +124,46 @@ namespace TradeView
         private void btnConnect_Click(object sender, EventArgs e)
         {
             // 从UI获取服务器和端口
-            string server = txtBoxServer.Text;
-            int port = int.Parse(txtBoxPort.Text);
 
+            string server = txtBoxServer.Text;
+            string portText = txtBoxPort.Text;
+            // 检查服Server地址和port是否有效
+            if (!IsValidIPAddress(server))
+            {
+                MessageBox.Show("無效的伺服器IP。", "錯誤", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            if (!int.TryParse(portText, out int port) || port < 0 || port > 65535)
+            {
+                MessageBox.Show("無效的port號碼。", "錯誤", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
             // 连接服务器
             dataClient.Connect(server, port);
-            
+            if (dataClient.IsConnected) 
+            {
+                //連線成功後，按鈕改為綠色
+                btnConnect.BackColor = Color.LightSeaGreen;
+                //禁用按鈕避免重複點擊
+                btnConnect.Enabled = false;
+                btnConnect.Text = "連線中";
+            }
+            else
+            {
+                // 如果没有连接到，重置dataClient并准备下一次连接
+                dataClient.ResetConnection();
+                // 显示错误消息
+                MessageBox.Show("無法連接到Server，請檢察IP與Port是否正確。", "連接失敗", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                logger.LogInfo("無法連接到Server，請檢察IP與Port是否正確。");
+            }
+
+        }
+
+        // 验证IP地址格式是否正确
+        private bool IsValidIPAddress(string ipAddress)
+        {
+            return IPAddress.TryParse(ipAddress, out _);
         }
         private void DataClient_NewDataReceived(StockQuote[] stockQuotes)
         {
@@ -174,7 +212,7 @@ namespace TradeView
         private void TrackBarRefreshRate_Scroll(object sender, EventArgs e)
         {
             // 更新标签以反映新的更新频率
-            labelRefreshRate.Text = $"更新频率: {trackBarRefreshRate.Value}ms";
+            labelRefreshRate.Text = $"更新頻率: {trackBarRefreshRate.Value}ms";
             // 这里你可以添加代码来改变数据更新的定时器的间隔
             // 获取TrackBar的当前值
             int interval = trackBarRefreshRate.Value;

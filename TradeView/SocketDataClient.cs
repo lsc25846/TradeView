@@ -13,12 +13,23 @@ namespace TradeView
     {
         private TcpClient tcpClient;
         private Thread receiveThread;
+        private readonly Logger logger;
         private bool isConnected = false;
 
         // 定义事件以便于通知表单数据已经接收
         public event Action<StockQuote[]> DataReceived;
         // 定义一个事件，用于通知新数据
         public event Action<StockQuote[]> NewDataReceived;
+        public SocketDataClient(Logger logger)
+        {
+            this.logger = logger;
+        }
+
+        public bool IsConnected
+        {
+            get { return isConnected; }
+        }
+
 
         public void Connect(string server, int port)
         {
@@ -32,10 +43,11 @@ namespace TradeView
                 receiveThread = new Thread(ReceiveData);
                 receiveThread.IsBackground = true;
                 receiveThread.Start();
+                logger.LogInfo("連接Server成功");
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error connecting to server: " + ex.Message);
+                logger.LogError(ex);
                 isConnected = false;
             }
         }
@@ -77,21 +89,51 @@ namespace TradeView
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("JSON Parsing Error: " + ex.Message);
-                    // 可能需要进一步处理错误或部分消息
+                    logger.LogError(ex);                                        
                 }
             }
         }
 
+        public void ResetConnection()
+        {
+            // 首先断开现有的连接
+            Disconnect();
 
+            // 重置状态
+            tcpClient = null;
+            receiveThread = null;
+            isConnected = false;
+
+            // 可以在这里记录一条日志
+            logger.LogInfo("Connection reset.");
+        }
         public void Disconnect()
         {
-            isConnected = false;
-            tcpClient?.Close();
+            if (isConnected)
+            {
+                logger.LogInfo("Disconnecting from server.");
+
+                // 标记为不再连接
+                isConnected = false;
+
+                // 关闭TcpClient
+                if (tcpClient != null)
+                {
+                    tcpClient.Close();
+                    tcpClient = null;
+                }
+
+                // 等待接收线程结束
+                if (receiveThread != null && receiveThread.IsAlive)
+                {
+                    receiveThread.Join();
+                    receiveThread = null;
+                }
+            }
         }
         private string FixJson(string brokenJson)
         {
-            // 插入逗号分隔符来分隔JSON对象，并将整个字符串包裹在中括号中
+            // 插入逗号分隔符来分隔JSON对象，并将整个字符串包裹在中括号中            
             string fixedJson = "[" + brokenJson.Replace("}{", "},{") + "]";
             return fixedJson;
         }
