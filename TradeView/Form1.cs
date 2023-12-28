@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Drawing;
 using System.Net;
+using System.Reflection;
 using System.Text.Json;
 using System.Windows.Forms;
 
@@ -174,7 +175,7 @@ namespace TradeView
         private void DataClient_DataReceived(StockQuote[] stockQuotes)
         {
             // 需要使用Invoke来确保跨线程操作UI是安全的
-            Invoke((MethodInvoker)(() =>
+            Invoke(new System.Windows.Forms.MethodInvoker(() =>
             {
                 UpdateStockQuotes(stockQuotes);
             }));
@@ -193,7 +194,8 @@ namespace TradeView
         {
             try
             {
-                string jsonContent = File.ReadAllText(filePath);
+                string jsonContent = ReadEmbeddedResource("TradeView.StockName.json");                
+                //string jsonContent = File.ReadAllText(filePath);
                 List<string> stockNames = JsonSerializer.Deserialize<List<string>>(jsonContent);
                 return stockNames ?? new List<string>();
             }
@@ -203,9 +205,18 @@ namespace TradeView
                 return new List<string>();
             }
         }
+        public static string ReadEmbeddedResource(string resourceName)
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            using (Stream stream = assembly.GetManifestResourceStream(resourceName))
+            using (StreamReader reader = new StreamReader(stream))
+            {
+                return reader.ReadToEnd();
+            }
+        }
 
 
-    private void Form1_Load(object sender, EventArgs e)
+        private void Form1_Load(object sender, EventArgs e)
         {
 
         }
